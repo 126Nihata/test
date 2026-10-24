@@ -1,0 +1,16 @@
+name: Run Foundry PoC
+
+on: [push]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run Exploit Test
+        run: forge test --match-contract WeETHPermitExploitTest -vvvv
