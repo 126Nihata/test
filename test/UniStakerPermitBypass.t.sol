@@ -35,7 +35,7 @@ contract UniStakerPermitBypassTest is Test {
 
         vm.stopPrank();
 
-        // 4. Sübut: Permit fail olmasına baxmayaraq, istifadəçinin vəsaiti çəkildi
+        // 4. Sübut: Permit fail olmasına baxmayaraq, istifadəçinin vəsaiti köhnə allowance sayəsində çəkildi
         assertEq(token.balanceOf(user), 500 ether, "Bypassed permit and drained via stale allowance!");
     }
 }
@@ -44,17 +44,25 @@ contract MockStakeToken {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
-    function mint(address to, uint256 amt) external { balanceOf[to] += amt; }
+    function mint(address to, uint256 amt) external { 
+        balanceOf[to] += amt; 
+    }
+
     function approve(address spender, uint256 amt) external returns (bool) {
         allowance[msg.sender][spender] = amt;
         return true;
     }
+
     function permit(address owner, address spender, uint256 value, uint256 deadline, uint8, bytes32, bytes32) external {
-        require(block.timestamp <= deadline, "Expired");
+        // Deadline keçibsə xəta atırıq ki, permit fail olsun və try/catch işə düşsün
+        require(block.timestamp <= deadline, "Expired deadline");
         allowance[owner][spender] = value;
     }
+
     function transferFrom(address from, address to, uint256 amt) external returns (bool) {
         require(allowance[from][msg.sender] >= amt, "Low allowance");
+        require(balanceOf[from] >= amt, "Low balance");
+        
         balanceOf[from] -= amt;
         balanceOf[to] += amt;
         allowance[from][msg.sender] -= amt;
@@ -67,11 +75,11 @@ contract UniStakerMock {
     constructor(address _token) { stakeToken = _token; }
 
     function permitAndStake(uint96 _amount, address, address, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s) external {
-        // UniStaker-dəki try/catch pattern-i:
+        // UniStaker-dəki try/catch permit swallowing naxışı:
         try MockStakeToken(stakeToken).permit(msg.sender, address(this), _amount, _deadline, _v, _r, _s) {} 
         catch {}
 
-        // Permit xətası udulur və köhnə allowance ilə davam edir:
+        // Permit xətası try/catch tərəfindən udulur və köhnə allowance ilə transferFrom icra olunur:
         MockStakeToken(stakeToken).transferFrom(msg.sender, address(this), _amount);
     }
 }
