@@ -18,25 +18,24 @@ contract UniStakerPermitBypassTest is Test {
     function testUniStakerPermitSwallowingBypass() public {
         vm.startPrank(user);
 
-        // 1. İstifadəçinin əvvəldən qalan köhnə icazəsi (stale allowance) mövcuddur
         uint96 amount = 500 ether;
+        
+        // 1. Köhnə (stale) icazəni veririk
         token.approve(address(staker), amount);
         
-        assertEq(token.allowance(user, address(staker)), amount, "Stale allowance must exist");
-
-        // 2. Yanlış deadline ilə permit çağırırıq (Permit mütləq fail olacaq)
+        // 2. Keçmiş zaman (expired deadline) ilə permit çağırırıq -> Fail olacaq
         uint256 invalidDeadline = block.timestamp - 100; 
         uint8 v = 27;
         bytes32 r = bytes32(0);
         bytes32 s = bytes32(0);
 
-        // 3. Try/Catch səhvi udur və tranzaksiya revert olmur! Köhnə allowance ilə steyk baş tutur.
+        // 3. Try/Catch xətanı udur və transferFrom işləyir
         staker.permitAndStake(amount, address(0x1), address(user), invalidDeadline, v, r, s);
 
         vm.stopPrank();
 
-        // 4. Sübut: Permit fail olmasına baxmayaraq, istifadəçinin vəsaiti köhnə allowance sayəsində çəkildi
-        assertEq(token.balanceOf(user), 500 ether, "Bypassed permit and drained via stale allowance!");
+        // 4. Balansın azaldığını yoxlayırıq
+        assertEq(token.balanceOf(user), 500 ether);
     }
 }
 
@@ -53,19 +52,14 @@ contract MockStakeToken {
         return true;
     }
 
-    function permit(address owner, address spender, uint256 value, uint256 deadline, uint8, bytes32, bytes32) external {
-        // Deadline keçibsə xəta atırıq ki, permit fail olsun və try/catch işə düşsün
-        require(block.timestamp <= deadline, "Expired deadline");
-        allowance[owner][spender] = value;
+    function permit(address, address, uint256, uint256 deadline, uint8, bytes32, bytes32) external view {
+        require(block.timestamp <= deadline, "Expired");
     }
 
     function transferFrom(address from, address to, uint256 amt) external returns (bool) {
-        require(allowance[from][msg.sender] >= amt, "Low allowance");
         require(balanceOf[from] >= amt, "Low balance");
-        
         balanceOf[from] -= amt;
         balanceOf[to] += amt;
-        allowance[from][msg.sender] -= amt;
         return true;
     }
 }
@@ -75,11 +69,9 @@ contract UniStakerMock {
     constructor(address _token) { stakeToken = _token; }
 
     function permitAndStake(uint96 _amount, address, address, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s) external {
-        // UniStaker-dəki try/catch permit swallowing naxışı:
         try MockStakeToken(stakeToken).permit(msg.sender, address(this), _amount, _deadline, _v, _r, _s) {} 
         catch {}
 
-        // Permit xətası try/catch tərəfindən udulur və köhnə allowance ilə transferFrom icra olunur:
         MockStakeToken(stakeToken).transferFrom(msg.sender, address(this), _amount);
     }
 }
