@@ -18,4 +18,4 @@ jobs:
           forge install foundry-rs/forge-std --no-commit || true
 
       - name: Run Exploit Test
-        run: forge test --match-contract WeETHPermitExploitTest -vvvv
+        run: forge test --match-contract UniStakerPermitBypassTest -vvvv
