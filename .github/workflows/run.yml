@@ -12,5 +12,10 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - name: Install forge-std library
+        run: |
+          git init
+          forge install foundry-rs/forge-std --no-commit || true
+
       - name: Run Exploit Test
         run: forge test --match-contract WeETHPermitExploitTest -vvvv
