@@ -1,25 +1,21 @@
-// SPDX-License-Identifier: MIT
+
+ // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
 import "forge-std/Test.sol";
 
-/**
- * @title Origin Protocol & Permit Try/Catch Swallowing PoC
- * @notice Bu test permit funksiyalarındakı try/catch bloklarının xətaları səssizcə 
- *         udduğunu və köhnə icazə (stale allowance) halında tranzaksiyanın necə 
- *         davam etdiyini simulyasiya edir.
- */
 contract OriginPermitSwallowTest is Test {
-    address user = address(0x1337);
-    address attacker = address(0xBAD);
+    address internal user = address(0x1337);
 
     function setUp() public {
         vm.deal(user, 100 ether);
     }
 
     function testPermitErrorSwallowingAndAllowanceBypass() public {
-        // 1. Etibarsız və ya vaxtı keçmiş permit parametrləri təyin edirik (deadline keçib)
-        uint256 deadline = block.timestamp - 1; 
+        uint256 deadline = block.timestamp == 0
+            ? 0
+            : block.timestamp - 1;
+
         uint8 v = 27;
         bytes32 r = bytes32(0);
         bytes32 s = bytes32(0);
@@ -27,23 +23,25 @@ contract OriginPermitSwallowTest is Test {
 
         bool executionContinued = false;
 
-        // 2. Try/Catch mexanizminin permit xətasını səssizcə udduğunu yoxlayırıq
-        try this.simulateProtocolEntryWithPermit(user, amount, deadline, v, r, s) {
+        try this.simulateProtocolEntryWithPermit(
+            user,
+            amount,
+            deadline,
+            v,
+            r,
+            s
+        ) {
             executionContinued = true;
         } catch {
             executionContinued = false;
         }
 
-        // 3. Doğrulama: Permit xəta verməsinə baxmayaraq try/catch səbəbindən tranzaksiya dayanmır
         assertTrue(
-            executionContinued, 
-            "Tranzaksiya permit xətasına görə revert olmalı idi, lakin try/catch tərəfindən uduldu!"
+            executionContinued,
+            "Expected execution to continue after permit error was caught"
         );
     }
 
-    /**
-     * @dev Protokolun giriş nöqtəsini (entry point) simulyasiya edən funksiya
-     */
     function simulateProtocolEntryWithPermit(
         address owner,
         uint256 amount,
@@ -52,17 +50,19 @@ contract OriginPermitSwallowTest is Test {
         bytes32 r,
         bytes32 s
     ) external {
-        // Try/Catch vasitəsilə permit çağırışının qorunması (Silent Catch)
-        try this.externalPermitCall(owner, amount, deadline, v, r, s) {
-            // Permit uğurlu olduqda icra olunan məntiq
+        try this.externalPermitCall(
+            owner,
+            amount,
+            deadline,
+            v,
+            r,
+            s
+        ) {
+            // Permit call succeeded.
         } catch {
-            // ⚡ KRİTİK ZƏİFLİK NÖQTƏSİ: Xəta burada catch {} tərəfindən tutulur 
-            // və tranzaksiya revert olmadan növbəti məntiqə keçir!
+            // Permit failure is intentionally ignored.
         }
 
-        // Aşağı səviyyəli icra (Downstream Logic): 
-        // Əgər istifadəçinin əvvəldən qalan köhnə icazəsi (stale allowance) varsa,
-        // uğursuz permit-ə baxmayaraq vəsait çəkilə bilər.
         this.simulateDownstreamTransfer(owner, amount);
     }
 
@@ -73,12 +73,17 @@ contract OriginPermitSwallowTest is Test {
         uint8,
         bytes32,
         bytes32
-    ) external pure {
-        // Vaxtı keçdiyi üçün permit qəsdən xəta (revert) qaytarır
-        require(deadline >= block.timestamp, "PermitExpiredOrInvalid");
+    ) external view {
+        require(
+            deadline >= block.timestamp,
+            "Permit expired or invalid"
+        );
     }
 
-    function simulateDownstreamTransfer(address, uint256) external pure {
-        // Permit xətası udulduqdan sonra əməliyyatın uğurla davam etdiyini göstərir
+    function simulateDownstreamTransfer(
+        address,
+        uint256
+    ) external pure {
+        // Simulate a downstream transfer.
     }
 }
