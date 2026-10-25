@@ -1,21 +1,24 @@
-name: Run Foundry PoC
+name: Foundry Test
 
-on: [push]
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
 
 jobs:
-  check:
+  run-forge-tests:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
 
-      - name: Install forge-std library
-        run: |
-          git init
-          forge install foundry-rs/forge-std --no-commit || true
+      - name: Run Foundry tests
+        run: forge test -vvv
 
-      - name: Run Exploit Test
-        run: forge test --match-contract UniStakerPermitBypassTest -vvvv
